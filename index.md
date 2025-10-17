@@ -76,7 +76,7 @@ differential expression analysis of RNA-seq data.
 
 10:15 - 11:30 [Statistical Analysis of Bulk RNAseq Data](Bulk_RNAseq_Course_Base/additional_scripts_and_materials/07_Statistics_1.pdf) - Chandra
 
-11:30 - 17:30 [Linear Models in R and DESeq2 (Slides)](Bulk_RNAseq_Course_Base/additional_scripts_and_materials/07_Statistics_2.pdf) - Chandra
+11:30 - 13:00 [Linear Models in R and DESeq2 (Slides)](Bulk_RNAseq_Course_Base/additional_scripts_and_materials/07_Statistics_2.pdf) - Chandra
 
 13:00 - 14:00 Lunch
 
