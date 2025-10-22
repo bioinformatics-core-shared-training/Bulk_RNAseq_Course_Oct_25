@@ -111,4 +111,47 @@ autoplot(pcDat,
          shape = 'TimePoint',
          size= 5)
 
+# Exercise
+pcDat$rotation %>% head()
 
+autoplot(pcDat,
+         data=sampleinfo,
+         colour = 'Status',
+         shape = 'TimePoint',
+         size= 5,
+         x = 2,
+         y = 3)
+
+# correct the sample sheet
+
+sampleinfo <- sampleinfo %>% 
+  mutate( Status = case_when(
+    SampleName == 'SRR7657882' ~ "Uninfected",
+    SampleName == 'SRR7657873' ~ 'Infected',
+    TRUE ~ Status
+    
+  ))
+
+
+
+# plot PCA
+autoplot(pcDat,
+         data=sampleinfo,
+         colour = 'Status',
+         shape = 'TimePoint',
+         size= 5)
+
+# Hierarchical clustering
+library(ggdendro)
+
+hclDat <- t(rlogcounts) %>% 
+  dist( method = 'euclidean') %>% 
+  hclust()
+
+
+ggdendrogram(hclDat, rotate = T)
+
+hclDat2 <- hclDat
+hclDat2$labels <- str_c( sampleinfo$Status, ":", sampleinfo$TimePoint)
+
+ggdendrogram(hclDat2, rotate = T)
