@@ -1,0 +1,394 @@
+---
+title: "RNA-seq Bulk course: Annotation and visualization (day3)"
+output: html_notebook
+author: Raquel Manzano Garcia (CRUK Cambridge Institure)
+---
+
+Here we will have the live code for the first half of day 3 from [Introduction to Bulk RNA-seq data analysis Oct 2025](https://bioinformatics-core-shared-training.github.io/Bulk_RNAseq_Course_Oct_25/).
+
+We will use the following libraries:
+
+```{r}
+library(AnnotationHub)
+library(AnnotationDbi)
+library(ensembldb)
+library(DESeq2)
+library(tidyverse)
+library(ggvenn)
+library(pheatmap)
+```
+
+
+# Annotation
+
+Following the materials that we have in  [here](https://bioinformatics-core-shared-training.github.io/Bulk_RNAseq_Course_Oct_25/Bulk_RNAseq_Course_Base/Markdowns/09_Annotation.html), we will annotate our DESeq2 results:
+
+## Load the data
+
+```{r}
+results.d11 <- readRDS("RObjects/DESeqResults.interaction_d11.rds")
+```
+
+
+## Querying our database
+
+We create an instance of AnnotationHub:
+
+```{r}
+ah <- AnnotationHub()
+ah
+```
+
+Exploring what ah is:
+
+```{r}
+ah[1]
+```
+Query for our specific analysis:
+
+```{r}
+dbResult <- query(ah, c("EnsDb", "Mus musculus", "102"))
+dbResult[1]
+```
+
+## Download the resource
+
+Download mouse data from annotation hub
+
+```{r}
+MouseEnsDb <- ah[[dbResult$ah_id]]
+MouseEnsDb
+```
+
+Extract gene annotations
+
+```{r}
+annotations <- genes(MouseEnsDb, return.type = "data.frame")
+annotations
+```
+
+## Subset the genes of interest
+
+
+```{r}
+annot <- annotations %>%
+  dplyr::select(gene_id, gene_name, description, entrezid) %>%
+  dplyr::filter(gene_id %in% rownames(results.d11))
+annot
+```
+
+It is normal to still have some missing annotations:
+
+```{r}
+annot[is.na(annot$entrezid),]
+```
+
+We can also have duplicated entries!
+
+```{r}
+dupEntrez <- annot %>%
+  filter(!is.na(entrezid)) %>%
+  add_count(entrezid) %>%
+  arrange(entrezid) %>%
+  filter(n>1)
+head(dupEntrez)
+```
+
+We have a clea version for you to continue the exercises and avoid any hiccups:
+
+```{r}
+annot <- readRDS("RObjects/Ensembl_annotations.rds")
+annot
+```
+
+
+We then join our annotation to our results:
+
+```{r}
+results.d11 <- as.data.frame(results.d11) %>%
+  rownames_to_column("GeneID") %>%
+  left_join(annot, "GeneID")
+```
+
+
+and save the results:
+
+```{r}
+write_tsv(results.d11, "results/result.d11_Annotated.txt")
+```
+
+
+# Visualisation
+
+Let's start with some QC and let's do a p-value sanity check:
+
+```{r}
+hist(results.d11$pvalue)
+```
+This is looking good.
+
+[Here](http://varianceexplained.org/statistics/interpreting-pvalue-histogram/) you can find more info about it.
+
+## Load the data
+
+Now, let's go back to our deseq2 results
+
+```{r}
+ddsObj <- readRDS("RObjects/DESeqDataSet.interaction.rds")
+annot  <- readRDS("RObjects/Ensembl_annotations.rds")
+```
+
+## Shrinking method
+
+Let's explore shrinking.
+
+```{r}
+shrink.11 <- lfcShrink(ddsObj, res = results.d11, type = "ashr")
+```
+
+
+```{r}
+shrinkTab.11 <- as.data.frame(shrink.11) %>%
+  rownames_to_column("GeneID") %>%
+  left_join(annot, "GeneID")
+shrinkTab.11
+```
+
+```{r}
+saveRDS(shrinkTab.11, file="results/Shrunk_REsults.d11.rds")
+```
+
+### Visualise shrinking
+
+```{r}
+plotMA(results.d11, alpha=0.05)
+plotMA(shrink.11, alpha=0.05)
+```
+
+
+## Volcano plots
+
+Very popular plot for differential expression analyses.
+
+
+```{r}
+volcano.d11 <- ggplot(shrinkTab.11, aes(x = log2FoldChange, y = -log10(pvalue))) +
+  # add points
+  geom_point(aes(colour = padj < 0.05), size=1) +
+  # add label for most significant gene
+  geom_text(data = ~top_n(.x, 3, wt = -padj), aes(label = Symbol)) +
+  # writing labels
+  labs(x = "log2(fold change)", y = "-log10(p-value)", colour = "FDR < 5%", title = "Infected vs Uninfected (day11)")
+volcano.d11
+```
+```{r}
+shrinkTab.11[shrinkTab.11$Symbol=="Irgm1",]
+```
+
+
+## Exercises
+
+### Exercise 1
+
+Volcano plot for d33
+
+1. load the data
+```{r}
+results.d33 <- readRDS("RObjects/DESeqResults.interaction_d33.rds")
+```
+
+2. Shrink
+
+```{r}
+shrink.33 <- lfcShrink(ddsObj, res = results.d33, type = "ashr")
+```
+
+```{r}
+plotMA(shrink.33, alpha=0.05)
+```
+
+3. Plot volcano
+```{r}
+shrinkTab.33 <- as.data.frame(shrink.33) %>%
+  rownames_to_column("GeneID") %>%
+  left_join(annot, "GeneID")
+shrinkTab.33
+```
+
+```{r}
+volcano.d33 <- ggplot(shrinkTab.33, aes(x = log2FoldChange, y = -log10(pvalue))) +
+  # add points
+  geom_point(aes(colour = padj < 0.05), size=1) +
+  # add label for most significant gene
+  geom_text(data = ~top_n(.x, 10, wt = -padj), aes(label = Symbol)) +
+  # writing labels
+  labs(x = "log2(fold change)", y = "-log10(p-value)", colour = "FDR < 5%", title = "Infected vs Uninfected (day33)")
+volcano.d33
+```
+
+4. Compare
+
+
+```{r}
+volcano.d11
+volcano.d33
+```
+
+### Exercise 2
+
+Recreate the MA plotwith ggplot
+
+```{r}
+plotMA(shrink.33, alpha=0.05)
+```
+
+
+```{r}
+ggplot(shrinkTab.33, aes(x = log2(baseMean), y = log2FoldChange)) +
+  geom_point(aes(col = padj < 0.05), size=1) +
+  scale_y_continuous(limits = c(-6, 6), oob = scales::squish) +
+  labs(x = "log2(Mean Expression", y = "log2(Fold Change", colour = "FDR < 5%", title="Infected vs Uninfected (day33)") + theme_bw()
+plotMA(shrink.33, alpha=0.05)
+```
+
+
+## Strip charts
+
+Check gene expression of specific genes across conditions
+
+```{r}
+geneID <- filter(shrinkTab.11, Symbol=="Jchain") %>%
+  pull(GeneID)
+
+plotCounts(ddsObj,
+           gene = geneID,
+           intgroup = c("TimePoint", "Status", "Replicate"),
+           returnData = T) %>%
+  ggplot(aes(x=Status, y=log2(count))) +
+  geom_point(aes(fill=Replicate), shape=21, size=2) +
+  facet_wrap(~TimePoint) +
+  expand_limits(y=0) +
+  labs(title="Normalised counts - Jchain gene") + 
+  theme_bw()
+```
+
+
+## Venn diagram
+
+Compare groups with numbers and see what overlaps.
+
+
+```{r}
+Upregulated.d11 <- shrinkTab.11 %>%
+  filter(padj < 0.05) %>%
+  filter(log2FoldChange > 0) %>%
+  pull("GeneID")
+
+getGenes <- function(shrTab, direction) {
+  
+  sign <- ifelse(direction =="up", 1, -1)
+  
+  shrTab %>% 
+    filter(padj < 0.05) %>%
+    filter(sign * log2FoldChange > 0) %>%
+    pull("GeneID")
+}
+
+
+vennLis <- list(Upregulated_d11   = Upregulated.d11,
+                Downregulated_d11 = getGenes(shrinkTab.11, "down"),
+                Upregulated_d33   = getGenes(shrinkTab.33, "up"),
+                Downregulated_d33 = getGenes(shrinkTab.33, "down"))
+```
+
+
+Plot the venn diagram:
+
+```{r}
+ggvenn(vennLis, set_name_size = 4)
+```
+
+
+## Heatmap
+
+We will be using pheatmap package 
+
+```{r}
+# extract significant genes from d11
+sigGenes <- shrinkTab.11 %>%
+  top_n(300, wt = -padj) %>%
+  pull("GeneID")
+head(sigGenes)
+```
+
+
+Extrating the values from the deseq2 object
+
+```{r}
+plotData <- vst(ddsObj)[sigGenes,] %>%
+  assay()
+```
+
+Let's choose some colors :)
+
+```{r}
+col.pal <- c("royalblue3", "ivory", "orange3")
+hmPalette <- colorRampPalette(col.pal)(100) 
+hmPalette
+```
+
+
+```{r}
+pheatmap(plotData, cluster_rows = T, cluster_cols = T, scale = "row", show_rownames = F, color = hmPalette)
+```
+
+
+```{r}
+annot_df <- colData(ddsObj) %>%
+  as.data.frame() %>%
+  select(Status, TimePoint)
+annot_df
+```
+
+Re-do the heatmap with annotations
+
+
+```{r}
+annot_col <- list(Status = c("Uninfected" = "darkgreen",
+                             "Infected" = "palegreen"),
+                  TimePoint = c("d11" = "lightblue",
+                                "d33" = "darkblue"))
+
+
+pheatmap(plotData, 
+         cluster_rows = T, 
+         cluster_cols = T, 
+         scale = "row", 
+         show_rownames = F, 
+         color = hmPalette,
+         annotation_col = annot_df,
+         cutree_rows = 5, 
+         annotation_colors = annot_col)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
